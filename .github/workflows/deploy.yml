@@ -47,6 +47,7 @@ jobs:
         run: |
           docker pull fucklrt/234-deploylab-backend:latest
           docker save fucklrt/234-deploylab-backend:latest -o backend.tar
+          sudo chmod 644 backend.tar
 
       # 【修改】把 .tar 文件和配置一起传到服务器
       - name: copy file via ssh password
