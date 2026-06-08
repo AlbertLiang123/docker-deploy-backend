@@ -35,10 +35,6 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: prepare the docker-compose run
-        run: |
-          ls -la
-
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -46,6 +42,13 @@ jobs:
           push: true
           tags: fucklrt/234-deploylab-backend:latest
 
+      # 【新增】将打包好的镜像压缩成 .tar 文件
+      - name: Export Image to Tarball
+        run: |
+          docker pull fucklrt/234-deploylab-backend:latest
+          docker save fucklrt/234-deploylab-backend:latest -o backend.tar
+
+      # 【修改】把 .tar 文件和配置一起传到服务器
       - name: copy file via ssh password
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -53,10 +56,11 @@ jobs:
           username: ${{ secrets.HOST_USER_NAME }}
           key: ${{ secrets.HOST_SSH_PRIVATE_KEY }}
           port: 22
-          source: "docker-compose.yml"
+          source: "docker-compose.yml,backend.tar"
           target: "/root/backend"
 
-      - name: docker compose
+      # 【终极修改】离线加载，强制安装，强力启动
+      - name: docker compose deploy
         uses: appleboy/ssh-action@v1.2.1
         with:
           host: ${{ secrets.HOST_SERVER }}
@@ -64,9 +68,17 @@ jobs:
           key: ${{ secrets.HOST_SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            mkdir -p /root/backend
             cd /root/backend
-            echo ${{ secrets.DOCKER_HUB_TOKEN }} | docker login --username ${{ secrets.DOCKER_HUB_USERNAME }} --password-stdin
+            
+            # 1. 强制安装 docker-compose（解决 unknown command 报错）
+            apt-get update && apt-get install docker-compose-plugin docker-compose -y || true
+            
+            # 2. 暴力删除 yml 里的 pull_policy，防止它强行联网去拉取镜像导致超时
+            sed -i '/pull_policy/d' docker-compose.yml
+            
+            # 3. 离线导入刚刚传过来的镜像包（完美绕过墙的封锁）
+            docker load -i backend.tar
+            
+            # 4. 用自带版本的 docker compose 启动
             docker compose down || true
-            docker compose pull
-            docker compose up -d
+            docker compose up -d || docker-compose up -d
