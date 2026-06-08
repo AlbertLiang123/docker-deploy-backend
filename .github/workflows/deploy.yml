@@ -70,16 +70,13 @@ jobs:
           port: 22
           script: |
             cd /root/backend
-            
-            # 1. 强制安装 docker-compose（解决 unknown command 报错）
-            apt-get update && apt-get install docker-compose-plugin docker-compose -y || true
-            
-            # 2. 暴力删除 yml 里的 pull_policy，防止它强行联网去拉取镜像导致超时
-            sed -i '/pull_policy/d' docker-compose.yml
-            
-            # 3. 离线导入刚刚传过来的镜像包（完美绕过墙的封锁）
+
+            # 1. 只装独立版 docker-compose（从 Ubuntu 源，阿里云镜像可访问）
+            apt-get update && apt-get install docker-compose -y
+
+            # 2. 离线导入镜像包
             docker load -i backend.tar
-            
-            # 4. 用自带版本的 docker compose 启动
-            docker compose down || true
-            docker compose up -d || docker-compose up -d
+
+            # 3. 启动
+            docker-compose down || true
+            docker-compose up -d
